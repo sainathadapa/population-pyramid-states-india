@@ -3,100 +3,134 @@ library(magrittr)
 library(dplyr)
 library(stringr)
 library(tidyr)
+library(svglite)
+library(scales)
 
 base_data <- readr::read_csv('all_states_data.csv')
 
 # remove 'INDIA' data
 base_data <- base_data %>% filter(!(state %in% 'INDIA'))
 
-# does every state have the same number of rows
+# Q: does every state have the same number of rows?
 base_data %>% 
   group_by(state) %>% 
   summarise(n = n()) %>% 
   ungroup %>% 
   select(n) %>% 
   distinct
-# yes
-  
-# is the age column values identical for all states
+# A: yes
+
+# Q: is the age column values identical for all states
 base_data %>% 
   select(state, age) %>% 
   arrange(state, age) %>% 
   nest(-state) %>% 
   extract2('data') %>% 
   unique
-# yes
+# A: yes
 
-# check if the % of 'Age not stated' is high in any state
+# Q: check if the % of 'Age not stated' is high in any state
 base_data %>% 
   select(state, age, total_persons) %>% 
   filter(age %in% c('Age not stated', 'All ages')) %>% 
   spread(key = 'age', value = 'total_persons') %>% 
   mutate(perc = `Age not stated` * 100 / `All ages`) -> 
-  toplot
-  
-ggplot(toplot) +
+  age_not_stated
+
+ggplot(age_not_stated) +
   geom_bar(aes(x = state, y = perc), stat = 'identity') +
   coord_flip() +
   xlab('State') +
   ylab('% of "Age not stated"')
-# It is within 1% for all states. Should be ok
+# A: It is within 1% for all states. Should be ok.
+# suprising to see Andhra pradesh to be one of the top states with age not stated :O
 
-one_state_data <- base_data %>% 
-  filter(state %in% 'ANDHRA PRADESH') %>% 
+base_data %>% 
   filter(!(age %in% c('Age not stated', 'All ages'))) %>% 
+  mutate(age = ifelse(age %in% '100+', 100, age)) %>% 
   mutate(age = age %>% as.numeric) %>% 
-  mutate(age = ifelse(is.na(age), 100, age))
-
-# people round off to the nearest 5 multiple if they don't know the exact value
-one_state_data$age <- cut(one_state_data$age, breaks = seq(from = 0, to = 100, by = 5), include.lowest = TRUE)
-
-one_state_data %>% 
-  group_by(age) %>% 
+  mutate(age = cut(age,
+                   breaks = seq(from = 0, to = 100, by = 5),
+                   include.lowest = TRUE)) %>% 
+  select(state, age, total_males, total_persons) %>% 
+  group_by(state, age) %>% 
   summarise(total_males = sum(total_males),
-            total_females = sum(total_females)) %>% 
-  ungroup ->
-  toplot
+            total_persons = sum(total_persons)) %>% 
+  ungroup %>% 
+  mutate(total_females = total_persons - total_males) -> 
+  summarised_data
 
-gg <- ggplot(toplot) +
-  geom_bar(aes(x = age, y = -total_males), stat = 'identity', fill = '#7986CB', color = 'black', alpha = 0.8, width = 1) +
-  geom_bar(aes(x = age, y = total_females), stat = 'identity', fill = '#FFB74D', color = 'black', alpha = 0.8, width = 1) +
-  coord_flip() +
-  geom_hline(aes(yintercept = 0)) +
-  theme_bw() +
-  ylab('Number of persons') +
-  xlab('Age')
-
-png(filename = 'ap1.png', width = 450, height = 750)
-plot(gg)
-dev.off()
-
-toplot %>% 
-  gather(key = 'key', value = 'value', -age) ->
-  toplot
-
-gg <- ggplot(toplot) +
-  geom_bar(aes(x = age, y = value, fill = key), stat = 'identity', position = 'dodge') +
-  scale_y_continuous(label = scales::comma) +
-  scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D')) +
-  coord_cartesian(expand = FALSE)
-
-png(filename = 'ap2.png', width = 1500, height = 900)
-plot(gg)
-dev.off()
-
-toplot %>% 
-  group_by(age) %>% 
-  mutate(percent = value / sum(value)) %>% 
-  ungroup ->
-  toplot
-
-gg <- ggplot(toplot) +
-  geom_bar(aes(x = age, y = percent, fill = key), stat = 'identity') +
-  scale_y_continuous(label = scales::comma) +
-  scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D')) +
-  coord_cartesian(ylim = c(0, 1), expand = FALSE)
-
-png(filename = 'ap3.png', width = 1500, height = 900)
-plot(gg)
-dev.off()
+# plotting one state at a time
+for (one_state in sort(unique(summarised_data$state))) {
+  
+  state_name <- one_state %>% 
+    tolower %>% 
+    gsub(x = .,
+         pattern = "\\b([[:alpha:]])([[:alpha:]]+)",
+         replacement = "\\U\\1\\L\\2",
+         perl = TRUE)
+  
+  one_state_data_long <- summarised_data %>% 
+    filter(state %in% one_state) %>% 
+    select(-state, -total_persons) %>% 
+    gather(key = 'key', value = 'value', -age)
+  
+  gg1 <- one_state_data_long %>% 
+    mutate(value = ifelse(key %in% 'total_males', -value, value)) %>% 
+    ggplot() +
+    geom_bar(aes(x = age, y = value, fill = key),  stat = 'identity') +
+    scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
+                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+    coord_flip() +
+    scale_y_continuous(labels = . %>% abs %>% comma) +
+    theme_bw() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    ylab('Number of persons') +
+    xlab('Age') +
+    ggtitle(state_name)
+  
+  svglite(paste0('plots/', one_state, '-1.svg'))
+  plot(gg1)
+  dev.off()
+  
+  gg2 <- ggplot(one_state_data_long) +
+    geom_bar(aes(x = age, y = value, fill = key), stat = 'identity', position = 'dodge') +
+    scale_y_continuous(label = scales::comma) +
+    scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
+                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+    coord_cartesian(expand = FALSE) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 0),
+          plot.title = element_text(hjust = 0.5)) +
+    ylab('Number of persons') +
+    xlab('Age') +
+    ggtitle(state_name)
+  
+  
+  svglite(paste0('plots/', one_state, '-2.svg'))
+  plot(gg2)
+  dev.off()
+  
+  one_state_data_long %>% 
+    group_by(age) %>% 
+    mutate(percent = value / sum(value)) %>% 
+    ungroup ->
+    one_state_data_long
+  
+  gg3 <- ggplot(one_state_data_long) +
+    geom_bar(aes(x = age, y = percent, fill = key), stat = 'identity') +
+    geom_hline(yintercept = 0.5, alpha = 0.5, linetype = 2) +
+    scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
+                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+    coord_cartesian(ylim = c(0, 1), expand = FALSE) +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 0),
+          plot.title = element_text(hjust = 0.5)) +
+    ylab('Number of Males / Total number of persons') +
+    xlab('Age') +
+    ggtitle(state_name)
+  
+  svglite(paste0('plots/', one_state, '-3.svg'))
+  plot(gg3)
+  dev.off()
+}
