@@ -47,11 +47,12 @@ ggplot(age_not_stated) +
 
 base_data %>% 
   filter(!(age %in% c('Age not stated', 'All ages'))) %>% 
-  mutate(age = ifelse(age %in% '100+', 100, age)) %>% 
+  mutate(age = ifelse(age %in% '100+', 101, age)) %>% 
   mutate(age = age %>% as.numeric) %>% 
   mutate(age = cut(age,
-                   breaks = seq(from = 0, to = 100, by = 5),
-                   include.lowest = TRUE)) %>% 
+                   breaks = seq(from = 0, to = 105, by = 5),
+                   include.lowest = TRUE,
+                   right = FALSE)) %>% 
   select(state, age, total_males, total_persons) %>% 
   group_by(state, age) %>% 
   summarise(total_males = sum(total_males),
@@ -60,8 +61,24 @@ base_data %>%
   mutate(total_females = total_persons - total_males) -> 
   summarised_data
 
+age_levels <- summarised_data$age %>% levels
+age_labels <- summarised_data$age %>%
+  levels %>% 
+  str_replace_all(fixed('['), '') %>% 
+  str_replace_all(fixed(')'), '') %>% 
+  str_replace_all(fixed(']'), '') %>% 
+  str_split_fixed(',', 2) %>% 
+  as_data_frame %>% 
+  mutate(V1 = as.numeric(V1),
+         V2 = as.numeric(V2) - 1) %>% 
+  mutate(ans = paste0(V1, '-' , V2)) %>% 
+  extract2('ans')
+age_labels[21] <- '100+'
+summarised_data$age <- factor(as.character(summarised_data$age), age_levels, age_labels, ordered = TRUE)
+
 # plotting one state at a time
 for (one_state in sort(unique(summarised_data$state))) {
+  message(one_state)
   
   state_name <- one_state %>% 
     tolower %>% 
@@ -80,12 +97,15 @@ for (one_state in sort(unique(summarised_data$state))) {
     ggplot() +
     geom_bar(aes(x = age, y = value, fill = key),  stat = 'identity') +
     scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
-                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+                      labels = c(total_males = 'Male',    total_females = 'Female'),
+                      name = '') +
     coord_flip() +
     scale_y_continuous(labels = . %>% abs %>% comma) +
-    theme_bw() +
-    theme(plot.title = element_text(hjust = 0.5)) +
-    ylab('Number of persons') +
+    theme_bw(base_size = 15) +
+    theme(plot.title = element_text(hjust = 0.5),
+          legend.position = c(0.8, 0.9),
+          legend.direction = 'horizontal') +
+    ylab('Population') +
     xlab('Age') +
     ggtitle(state_name)
   
@@ -97,12 +117,15 @@ for (one_state in sort(unique(summarised_data$state))) {
     geom_bar(aes(x = age, y = value, fill = key), stat = 'identity', position = 'dodge') +
     scale_y_continuous(label = scales::comma) +
     scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
-                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+                      labels = c(total_males = 'Male',    total_females = 'Female'),
+                      name = '') +
     coord_cartesian(expand = FALSE) +
-    theme_bw() +
+    theme_bw(base_size = 15) +
     theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 0),
-          plot.title = element_text(hjust = 0.5)) +
-    ylab('Number of persons') +
+          plot.title = element_text(hjust = 0.5),
+          legend.position = c(0.8, 0.9),
+          legend.direction = 'horizontal') +
+    ylab('Population') +
     xlab('Age') +
     ggtitle(state_name)
   
@@ -121,12 +144,15 @@ for (one_state in sort(unique(summarised_data$state))) {
     geom_bar(aes(x = age, y = percent, fill = key), stat = 'identity') +
     geom_hline(yintercept = 0.5, alpha = 0.5, linetype = 2) +
     scale_fill_manual(values = c(total_males = '#7986CB', total_females = '#FFB74D'),
-                      labels = c(total_males = 'Male',    total_females = 'Female')) +
+                      labels = c(total_males = 'Male',    total_females = 'Female'),
+                      name = '') +
     coord_cartesian(ylim = c(0, 1), expand = FALSE) +
-    theme_bw() +
+    theme_bw(base_size = 15) +
     theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 0),
-          plot.title = element_text(hjust = 0.5)) +
-    ylab('Number of Males / Total number of persons') +
+          plot.title = element_text(hjust = 0.5),
+          legend.position = 'bottom',
+          legend.direction = 'horizontal') +
+    ylab('Number of Males / Total population') +
     xlab('Age') +
     ggtitle(state_name)
   
