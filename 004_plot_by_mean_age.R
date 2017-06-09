@@ -63,7 +63,7 @@ state_names <- mean_rank$state %>%
   ifelse(. == 'Nct Of Delhi', 'Delhi', .) %>% 
   unname
 
-state_names <- state_names %>% paste0('\n', "Mean Age: ", mean_rank$mean_age %>% round(1))
+# state_names <- state_names %>% paste0('\n', "Mean Age: ", mean_rank$mean_age %>% round(1))
 
 toplot <- summarised_data %>% 
   select(state, age, total_persons) %>% 
