@@ -8,9 +8,6 @@ library(scales)
 
 base_data <- readr::read_csv('all_states_data.csv')
 
-# remove 'INDIA' data
-base_data <- base_data %>% filter(!(state %in% 'INDIA'))
-
 # Q: does every state have the same number of rows?
 base_data %>% 
   group_by(state) %>% 

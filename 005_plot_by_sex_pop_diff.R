@@ -9,9 +9,6 @@ library(e1071)
 
 base_data <- readr::read_csv('all_states_data.csv')
 
-# remove 'INDIA' data
-base_data <- base_data %>% filter(!(state %in% 'INDIA'))
-
 base_data %>% 
   filter(!(age %in% c('Age not stated', 'All ages'))) %>% 
   mutate(age = ifelse(age %in% '100+', 101, age)) %>% 

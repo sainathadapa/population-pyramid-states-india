@@ -9,9 +9,6 @@ library(e1071)
 
 base_data <- readr::read_csv('all_states_data.csv')
 
-# remove 'INDIA' data
-base_data <- base_data %>% filter(!(state %in% 'INDIA'))
-
 base_data %>% 
   filter(!(age %in% c('Age not stated', 'All ages'))) %>% 
   mutate(age = ifelse(age %in% '100+', 101, age)) %>% 
@@ -125,17 +122,3 @@ gg <- toplot %>%
 svglite('states-sorted-mean-age2.svg')
 print(gg)
 dev.off()
-
-p <- ggplot(toplot, aes(x = age, y = total_persons, frame = rank)) + 
-  geom_bar(stat = 'identity', position = "identity", fill = '#66BB6A') +
-  coord_cartesian(expand = FALSE, ylim = c(0, max(toplot$total_persons))) +
-  theme_bw() +
-  theme(axis.text.x = element_text(angle = -90, vjust = 0.5, hjust = 0),
-        plot.title = element_text(hjust = 0.5)) +
-  ylab('% of Total population') +
-  xlab('Age') + 
-  geom_label(aes(y = 0.16, x = 20, label = state), vjust = "inward", hjust = "inward", color = '#66BB6A', label.size = 0, size = 7) +
-  scale_y_continuous(labels = function(breaks) breaks %>% multiply_by(100) %>% round(digits = 0) %>% paste0('%'))
-
-gganimate(p, "output.html", cumulative = TRUE, title_frame = FALSE)
-
